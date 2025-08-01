@@ -10,6 +10,7 @@ import ProductCategory from "./pages/ProductCategory";
 import Cart from "./pages/Cart";
 import CustomDesign from "./pages/CustomDesign";
 import About from "./pages/About";
+import CheckoutSuccess from "./pages/CheckoutSuccess";
 
 function App() {
   return (
@@ -27,6 +28,7 @@ function App() {
               <Route path="/cart" element={<Cart />} />
               <Route path="/custom-design" element={<CustomDesign />} />
               <Route path="/about" element={<About />} />
+              <Route path="/checkout/success" element={<CheckoutSuccess />} />
             </Routes>
           </main>
           <Footer />
