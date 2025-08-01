@@ -432,10 +432,11 @@ async def test_stripe_checkout_api(session: aiohttp.ClientSession):
         checkout_session = response['data']
         if isinstance(checkout_session, dict) and 'session_id' in checkout_session:
             session_id = checkout_session['session_id']
-            expected_fields = ['session_id', 'checkout_url']
+            # The API returns 'url' field, not 'checkout_url'
+            expected_fields = ['session_id', 'url']
             has_required_fields = all(field in checkout_session for field in expected_fields)
             
-            if has_required_fields and checkout_session['checkout_url'].startswith('https://'):
+            if has_required_fields and checkout_session['url'].startswith('https://'):
                 results.log_pass("POST /checkout/create-session - Creates checkout session successfully")
             else:
                 results.log_fail("POST /checkout/create-session", f"Missing required fields or invalid URL: {checkout_session}")
