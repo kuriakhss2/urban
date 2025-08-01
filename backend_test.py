@@ -390,6 +390,117 @@ async def test_newsletter_api(session: aiohttp.ClientSession):
     else:
         results.log_fail("GET /newsletter/subscribers", f"Status: {response['status']}")
 
+async def test_stripe_checkout_api(session: aiohttp.ClientSession):
+    """Test Stripe Checkout API endpoints"""
+    print(f"\n🔍 Testing Stripe Checkout API...")
+    
+    # First, create an order to use for checkout testing
+    order_data = {
+        "items": [
+            {
+                "product_id": 1,
+                "name": "Urban Essential Tee",
+                "price": 28.0,
+                "quantity": 2,
+                "image": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400&h=400&fit=crop&crop=center"
+            }
+        ],
+        "total": 56.0,
+        "customer_email": "checkout.test@email.com"
+    }
+    
+    # Create order first
+    order_response = await make_request(session, 'POST', f"{BASE_URL}/orders", data=order_data)
+    
+    if not order_response['success']:
+        results.log_fail("Stripe Checkout Setup", f"Failed to create test order: {order_response['status']}")
+        return
+    
+    order_id = order_response['data']['id']
+    
+    # Test 1: Create Stripe checkout session
+    checkout_data = {
+        "order_id": order_id,
+        "customer_email": "checkout.test@email.com",
+        "origin_url": "https://example.com"
+    }
+    
+    response = await make_request(session, 'POST', f"{BASE_URL}/checkout/create-session", data=checkout_data)
+    
+    session_id = None
+    if response['success']:
+        checkout_session = response['data']
+        if isinstance(checkout_session, dict) and 'session_id' in checkout_session:
+            session_id = checkout_session['session_id']
+            expected_fields = ['session_id', 'checkout_url']
+            has_required_fields = all(field in checkout_session for field in expected_fields)
+            
+            if has_required_fields and checkout_session['checkout_url'].startswith('https://'):
+                results.log_pass("POST /checkout/create-session - Creates checkout session successfully")
+            else:
+                results.log_fail("POST /checkout/create-session", f"Missing required fields or invalid URL: {checkout_session}")
+        else:
+            results.log_fail("POST /checkout/create-session", f"Invalid checkout session response: {checkout_session}")
+    else:
+        results.log_fail("POST /checkout/create-session", f"Status: {response['status']}, Data: {response.get('data')}")
+    
+    # Test 2: Get checkout status (if session was created successfully)
+    if session_id:
+        response = await make_request(session, 'GET', f"{BASE_URL}/checkout/status/{session_id}")
+        
+        if response['success']:
+            status_response = response['data']
+            if isinstance(status_response, dict):
+                expected_fields = ['session_id', 'status', 'payment_status', 'amount_total', 'currency']
+                has_required_fields = all(field in status_response for field in expected_fields)
+                
+                if has_required_fields and status_response['session_id'] == session_id:
+                    results.log_pass("GET /checkout/status/{session_id} - Returns proper status response")
+                else:
+                    results.log_fail("GET /checkout/status/{session_id}", f"Missing fields or session_id mismatch: {status_response}")
+            else:
+                results.log_fail("GET /checkout/status/{session_id}", f"Invalid status response: {status_response}")
+        else:
+            results.log_fail("GET /checkout/status/{session_id}", f"Status: {response['status']}")
+    
+    # Test 3: Test with invalid order_id (should return 404)
+    invalid_checkout_data = {
+        "order_id": "non-existent-order-id",
+        "customer_email": "test@email.com",
+        "origin_url": "https://example.com"
+    }
+    
+    response = await make_request(session, 'POST', f"{BASE_URL}/checkout/create-session", 
+                                data=invalid_checkout_data, expected_status=404)
+    
+    if response['success']:
+        results.log_pass("POST /checkout/create-session with invalid order_id - Returns 404")
+    else:
+        results.log_fail("POST /checkout/create-session with invalid order_id", f"Expected 404, got {response['status']}")
+    
+    # Test 4: Test status check with non-existent session_id
+    response = await make_request(session, 'GET', f"{BASE_URL}/checkout/status/non-existent-session", 
+                                expected_status=404)
+    
+    if response['success']:
+        results.log_pass("GET /checkout/status/non-existent-session - Returns 404")
+    else:
+        results.log_fail("GET /checkout/status/non-existent-session", f"Expected 404, got {response['status']}")
+    
+    # Test 5: Test with malformed checkout request (missing required fields)
+    malformed_data = {
+        "order_id": order_id
+        # Missing customer_email and origin_url
+    }
+    
+    response = await make_request(session, 'POST', f"{BASE_URL}/checkout/create-session", 
+                                data=malformed_data, expected_status=422)
+    
+    if response['success']:
+        results.log_pass("POST /checkout/create-session with malformed data - Returns 422 validation error")
+    else:
+        results.log_fail("POST /checkout/create-session with malformed data", f"Expected 422, got {response['status']}")
+
 async def test_error_handling(session: aiohttp.ClientSession):
     """Test error handling scenarios"""
     print(f"\n🔍 Testing Error Handling...")
