@@ -1,15 +1,18 @@
-from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import os
 import logging
 from pathlib import Path
 from typing import List
+from datetime import datetime
 
 # Import models and database
 from models import *
 from database import *
 from email_service import send_custom_order_notification, send_order_confirmation
+from payment_models import CheckoutRequest, CheckoutStatusRequest
+from stripe_service import stripe_service
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -104,6 +107,36 @@ async def get_order(order_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# Stripe Checkout endpoints
+@api_router.post("/checkout/create-session")
+async def create_checkout_session(request: Request, checkout_data: CheckoutRequest):
+    """Create Stripe checkout session"""
+    base_url = str(request.base_url)
+    return await stripe_service.create_checkout_session(
+        order_id=checkout_data.order_id,
+        customer_email=checkout_data.customer_email,
+        origin_url=checkout_data.origin_url
+    )
+
+@api_router.get("/checkout/status/{session_id}")
+async def get_checkout_status(request: Request, session_id: str):
+    """Get Stripe checkout session status"""
+    base_url = str(request.base_url)
+    return await stripe_service.get_checkout_status(session_id, base_url)
+
+# Stripe webhook endpoint
+@api_router.post("/webhook/stripe")
+async def stripe_webhook(request: Request):
+    """Handle Stripe webhook events"""
+    base_url = str(request.base_url)
+    body = await request.body()
+    stripe_signature = request.headers.get("Stripe-Signature")
+    
+    if not stripe_signature:
+        raise HTTPException(status_code=400, detail="Missing Stripe signature")
+    
+    return await stripe_service.handle_webhook(body, stripe_signature, base_url)
+
 # Custom orders endpoints
 @api_router.post("/custom-orders", response_model=CustomOrder)
 async def create_custom_order(custom_order_data: CustomOrderCreate):
@@ -165,7 +198,7 @@ app.include_router(api_router)
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.INFO, 
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)

@@ -19,7 +19,7 @@ const Cart = () => {
   const [customerEmail, setCustomerEmail] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const handleCheckout = async () => {
+  const handleStripeCheckout = async () => {
     if (items.length === 0) return;
     
     if (!customerEmail) {
@@ -34,6 +34,7 @@ const Cart = () => {
     setIsProcessing(true);
     
     try {
+      // First create the order
       const orderData = {
         items: items.map(item => ({
           product_id: item.id,
@@ -46,20 +47,35 @@ const Cart = () => {
         customer_email: customerEmail
       };
 
-      const response = await axios.post(`${API}/orders`, orderData);
+      const orderResponse = await axios.post(`${API}/orders`, orderData);
+      const orderId = orderResponse.data.id;
       
-      toast({
-        title: "Order Placed Successfully!",
-        description: `Your order #${response.data.id.slice(0, 8)} has been processed. Thank you for shopping with Urban Threads!`,
-      });
+      // Create Stripe checkout session
+      const checkoutData = {
+        order_id: orderId,
+        customer_email: customerEmail,
+        origin_url: window.location.origin
+      };
+
+      const checkoutResponse = await axios.post(`${API}/checkout/create-session`, checkoutData);
       
-      clearCart();
-      setCustomerEmail('');
+      // Redirect to Stripe Checkout
+      if (checkoutResponse.data.url) {
+        // Clear cart before redirecting to Stripe
+        clearCart();
+        setCustomerEmail('');
+        
+        // Redirect to Stripe Checkout
+        window.location.href = checkoutResponse.data.url;
+      } else {
+        throw new Error('No checkout URL received');
+      }
+      
     } catch (error) {
       console.error('Checkout error:', error);
       toast({
         title: "Checkout Failed",
-        description: "There was an error processing your order. Please try again.",
+        description: error.response?.data?.detail || "There was an error processing your order. Please try again.",
         variant: "destructive"
       });
     } finally {
@@ -163,7 +179,7 @@ const Cart = () => {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Shipping</span>
-                    <span className="font-medium">Free</span>
+                    <span className="font-medium">Free</span>  
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Tax</span>
@@ -190,12 +206,12 @@ const Cart = () => {
                 </div>
 
                 <Button 
-                  onClick={handleCheckout}
+                  onClick={handleStripeCheckout}
                   disabled={isProcessing}
                   className="w-full bg-black text-white hover:bg-gray-800 mb-4"
                   size="lg"
                 >
-                  {isProcessing ? 'Processing...' : 'Checkout'}
+                  {isProcessing ? 'Processing...' : 'Checkout with Stripe'}
                 </Button>
                 
                 <Button 
