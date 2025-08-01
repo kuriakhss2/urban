@@ -5,19 +5,66 @@ import { Card, CardContent } from '../components/ui/card';
 import { Minus, Plus, Trash2, ShoppingBag } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useToast } from '../hooks/use-toast';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { useState } from 'react';
+import axios from 'axios';
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const API = `${BACKEND_URL}/api`;
 
 const Cart = () => {
   const { items, updateQuantity, removeFromCart, clearCart, getTotalPrice } = useCart();
   const { toast } = useToast();
+  const [customerEmail, setCustomerEmail] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     if (items.length === 0) return;
     
-    toast({
-      title: "Order Placed!",
-      description: `Your order total of $${getTotalPrice().toFixed(2)} has been processed. Thank you for shopping with Urban Threads!`,
-    });
-    clearCart();
+    if (!customerEmail) {
+      toast({
+        title: "Email Required",
+        description: "Please enter your email address to complete the order.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsProcessing(true);
+    
+    try {
+      const orderData = {
+        items: items.map(item => ({
+          product_id: item.id,
+          name: item.name,
+          price: item.price,
+          quantity: item.quantity,
+          image: item.image
+        })),
+        total: getTotalPrice() * 1.08, // Including tax
+        customer_email: customerEmail
+      };
+
+      const response = await axios.post(`${API}/orders`, orderData);
+      
+      toast({
+        title: "Order Placed Successfully!",
+        description: `Your order #${response.data.id.slice(0, 8)} has been processed. Thank you for shopping with Urban Threads!`,
+      });
+      
+      clearCart();
+      setCustomerEmail('');
+    } catch (error) {
+      console.error('Checkout error:', error);
+      toast({
+        title: "Checkout Failed",
+        description: "There was an error processing your order. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   if (items.length === 0) {
@@ -129,12 +176,26 @@ const Cart = () => {
                   </div>
                 </div>
 
+                <div className="mb-6">
+                  <Label htmlFor="email">Email Address</Label>
+                  <Input
+                    type="email"
+                    id="email"
+                    placeholder="your@email.com"
+                    value={customerEmail}
+                    onChange={(e) => setCustomerEmail(e.target.value)}
+                    className="mt-2"
+                    required
+                  />
+                </div>
+
                 <Button 
                   onClick={handleCheckout}
+                  disabled={isProcessing}
                   className="w-full bg-black text-white hover:bg-gray-800 mb-4"
                   size="lg"
                 >
-                  Checkout
+                  {isProcessing ? 'Processing...' : 'Checkout'}
                 </Button>
                 
                 <Button 

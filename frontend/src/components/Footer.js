@@ -4,27 +4,47 @@ import { Mail, Instagram, Twitter, Facebook } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { useToast } from '../hooks/use-toast';
-import { mockNewsletterSubscribers } from '../mock';
+import axios from 'axios';
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const API = `${BACKEND_URL}/api`;
 
 const Footer = () => {
   const [email, setEmail] = useState('');
+  const [isSubscribing, setIsSubscribing] = useState(false);
   const { toast } = useToast();
 
-  const handleNewsletterSubmit = (e) => {
+  const handleNewsletterSubmit = async (e) => {
     e.preventDefault();
-    if (email) {
-      // Mock newsletter subscription
-      mockNewsletterSubscribers.push({
-        id: Date.now(),
-        email: email,
-        subscribedAt: new Date().toISOString()
-      });
+    if (!email) return;
+
+    setIsSubscribing(true);
+
+    try {
+      await axios.post(`${API}/newsletter/subscribe`, { email });
       
       toast({
         title: "Subscribed!",
         description: "Thank you for subscribing to our newsletter.",
       });
       setEmail('');
+    } catch (error) {
+      console.error('Newsletter subscription error:', error);
+      if (error.response?.status === 400) {
+        toast({
+          title: "Already Subscribed",
+          description: "This email is already subscribed to our newsletter.",
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Subscription Failed",
+          description: "There was an error subscribing to the newsletter. Please try again.",
+          variant: "destructive"
+        });
+      }
+    } finally {
+      setIsSubscribing(false);
     }
   };
 
@@ -86,10 +106,11 @@ const Footer = () => {
               />
               <Button 
                 type="submit" 
+                disabled={isSubscribing}
                 className="w-full bg-white text-black hover:bg-gray-200 transition-colors"
               >
                 <Mail className="h-4 w-4 mr-2" />
-                Subscribe
+                {isSubscribing ? 'Subscribing...' : 'Subscribe'}
               </Button>
             </form>
           </div>

@@ -1,19 +1,43 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCart } from '../context/CartContext';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { useToast } from '../hooks/use-toast';
-import { mockProducts } from '../mock';
+import axios from 'axios';
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const API = `${BACKEND_URL}/api`;
 
 const ProductCategory = ({ category }) => {
   const [sortBy, setSortBy] = useState('name');
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
   const { addToCart } = useCart();
   const { toast } = useToast();
 
-  const categoryProducts = mockProducts.filter(product => product.category === category);
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        setLoading(true);
+        const response = await axios.get(`${API}/products/category/${category}`);
+        setProducts(response.data);
+        setLoading(false);
+      } catch (error) {
+        console.error('Error fetching products:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load products. Please try again.",
+          variant: "destructive"
+        });
+        setLoading(false);
+      }
+    };
+
+    fetchProducts();
+  }, [category]);
   
-  const sortedProducts = [...categoryProducts].sort((a, b) => {
+  const sortedProducts = [...products].sort((a, b) => {
     if (sortBy === 'price-low') return a.price - b.price;
     if (sortBy === 'price-high') return b.price - a.price;
     return a.name.localeCompare(b.name);
@@ -64,36 +88,53 @@ const ProductCategory = ({ category }) => {
         </div>
 
         {/* Products Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {sortedProducts.map((product) => (
-            <Card key={product.id} className="group hover:shadow-lg transition-all duration-300 border-gray-200">
-              <CardContent className="p-0">
-                <div className="aspect-square overflow-hidden">
-                  <img
-                    src={product.image}
-                    alt={product.name}
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                  />
-                </div>
-                <div className="p-4">
-                  <h3 className="font-semibold text-black mb-2 text-lg">{product.name}</h3>
-                  <p className="text-gray-600 text-sm mb-4 line-clamp-2">{product.description}</p>
-                  <div className="flex justify-between items-center">
-                    <span className="text-2xl font-bold text-black">${product.price}</span>
-                    <Button 
-                      onClick={() => handleAddToCart(product)}
-                      className="bg-black text-white hover:bg-gray-800 transition-all duration-300 transform hover:scale-105"
-                    >
-                      Add to Cart
-                    </Button>
+        {loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {[...Array(8)].map((_, i) => (
+              <Card key={i} className="border-gray-200">
+                <CardContent className="p-0">
+                  <div className="aspect-square bg-gray-200 animate-pulse"></div>
+                  <div className="p-4 space-y-2">
+                    <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                    <div className="h-3 bg-gray-200 rounded animate-pulse"></div>
+                    <div className="h-6 bg-gray-200 rounded animate-pulse"></div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {sortedProducts.map((product) => (
+              <Card key={product.id} className="group hover:shadow-lg transition-all duration-300 border-gray-200">
+                <CardContent className="p-0">
+                  <div className="aspect-square overflow-hidden">
+                    <img
+                      src={product.image}
+                      alt={product.name}
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                    />
+                  </div>
+                  <div className="p-4">
+                    <h3 className="font-semibold text-black mb-2 text-lg">{product.name}</h3>
+                    <p className="text-gray-600 text-sm mb-4 line-clamp-2">{product.description}</p>
+                    <div className="flex justify-between items-center">
+                      <span className="text-2xl font-bold text-black">${product.price}</span>
+                      <Button 
+                        onClick={() => handleAddToCart(product)}
+                        className="bg-black text-white hover:bg-gray-800 transition-all duration-300 transform hover:scale-105"
+                      >
+                        Add to Cart
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
 
-        {sortedProducts.length === 0 && (
+        {!loading && sortedProducts.length === 0 && (
           <div className="text-center py-16">
             <p className="text-gray-500 text-lg">No products found in this category.</p>
           </div>

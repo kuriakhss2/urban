@@ -1,12 +1,20 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Shirt, Book, Footprints, Zap } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
-import { mockProducts } from '../mock';
+import { useCart } from '../context/CartContext';
+import { useToast } from '../hooks/use-toast';
+import axios from 'axios';
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const API = `${BACKEND_URL}/api`;
 
 const Home = () => {
-  const featuredProducts = mockProducts.slice(0, 8);
+  const [featuredProducts, setFeaturedProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const { addToCart } = useCart();
+  const { toast } = useToast();
   
   const categories = [
     { name: 'Clothes', icon: Shirt, path: '/clothes', color: 'bg-gray-100' },
@@ -14,6 +22,34 @@ const Home = () => {
     { name: 'Books', icon: Book, path: '/books', color: 'bg-gray-300' },
     { name: 'Shoes', icon: Footprints, path: '/shoes', color: 'bg-gray-400' }
   ];
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const response = await axios.get(`${API}/products`);
+        setFeaturedProducts(response.data.slice(0, 8));
+        setLoading(false);
+      } catch (error) {
+        console.error('Error fetching products:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load products. Please try again.",
+          variant: "destructive"
+        });
+        setLoading(false);
+      }
+    };
+
+    fetchProducts();
+  }, []);
+
+  const handleAddToCart = (product) => {
+    addToCart(product);
+    toast({
+      title: "Added to cart!",
+      description: `${product.name} has been added to your cart.`,
+    });
+  };
 
   return (
     <div className="min-h-screen bg-white">
@@ -77,34 +113,54 @@ const Home = () => {
       <section className="py-16 px-4 bg-gray-50">
         <div className="max-w-7xl mx-auto">
           <h2 className="text-4xl font-bold text-center mb-12 text-black">Featured Products</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {featuredProducts.map((product) => (
-              <Card key={product.id} className="group hover:shadow-lg transition-all duration-300 border-gray-200">
-                <CardContent className="p-0">
-                  <div className="aspect-square overflow-hidden">
-                    <img
-                      src={product.image}
-                      alt={product.name}
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                    />
-                  </div>
-                  <div className="p-4">
-                    <h3 className="font-semibold text-black mb-2">{product.name}</h3>
-                    <p className="text-gray-600 text-sm mb-3">{product.description}</p>
-                    <div className="flex justify-between items-center">
-                      <span className="text-2xl font-bold text-black">${product.price}</span>
-                      <Button 
-                        size="sm" 
-                        className="bg-black text-white hover:bg-gray-800 transition-colors"
-                      >
-                        Add to Cart
-                      </Button>
+          
+          {loading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {[...Array(8)].map((_, i) => (
+                <Card key={i} className="border-gray-200">
+                  <CardContent className="p-0">
+                    <div className="aspect-square bg-gray-200 animate-pulse"></div>
+                    <div className="p-4 space-y-2">
+                      <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                      <div className="h-3 bg-gray-200 rounded animate-pulse"></div>
+                      <div className="h-6 bg-gray-200 rounded animate-pulse"></div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {featuredProducts.map((product) => (
+                <Card key={product.id} className="group hover:shadow-lg transition-all duration-300 border-gray-200">
+                  <CardContent className="p-0">
+                    <div className="aspect-square overflow-hidden">
+                      <img
+                        src={product.image}
+                        alt={product.name}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                      />
+                    </div>
+                    <div className="p-4">
+                      <h3 className="font-semibold text-black mb-2">{product.name}</h3>
+                      <p className="text-gray-600 text-sm mb-3">{product.description}</p>
+                      <div className="flex justify-between items-center">
+                        <span className="text-2xl font-bold text-black">${product.price}</span>
+                        <Button 
+                          onClick={() => handleAddToCart(product)}
+                          size="sm" 
+                          className="bg-black text-white hover:bg-gray-800 transition-colors"
+                        >
+                          Add to Cart
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+          
           <div className="text-center mt-12">
             <Button size="lg" variant="outline" className="border-black text-black hover:bg-black hover:text-white">
               <Link to="/clothes">View All Products</Link>

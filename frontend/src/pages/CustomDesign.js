@@ -6,7 +6,10 @@ import { Textarea } from '../components/ui/textarea';
 import { Label } from '../components/ui/label';
 import { Upload, Shirt, Type, Image } from 'lucide-react';
 import { useToast } from '../hooks/use-toast';
-import { mockCustomOrders } from '../mock';
+import axios from 'axios';
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const API = `${BACKEND_URL}/api`;
 
 const CustomDesign = () => {
   const [formData, setFormData] = useState({
@@ -16,6 +19,7 @@ const CustomDesign = () => {
     selectedFile: null
   });
   const [dragActive, setDragActive] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
   const handleInputChange = (e) => {
@@ -59,7 +63,7 @@ const CustomDesign = () => {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     if (!formData.email || (!formData.customText && !formData.selectedFile)) {
@@ -71,31 +75,40 @@ const CustomDesign = () => {
       return;
     }
 
-    // Mock storing the custom order
-    const newOrder = {
-      id: Date.now(),
-      email: formData.email,
-      customText: formData.customText,
-      description: formData.description,
-      fileName: formData.selectedFile?.name || null,
-      createdAt: new Date().toISOString(),
-      status: 'pending'
-    };
+    setIsSubmitting(true);
 
-    mockCustomOrders.push(newOrder);
+    try {
+      const customOrderData = {
+        email: formData.email,
+        custom_text: formData.customText || null,
+        description: formData.description || null,
+        file_name: formData.selectedFile?.name || null
+      };
 
-    toast({
-      title: "Custom Order Submitted!",
-      description: "We've received your custom t-shirt order. We'll contact you within 24 hours with a quote and timeline.",
-    });
+      const response = await axios.post(`${API}/custom-orders`, customOrderData);
 
-    // Reset form
-    setFormData({
-      email: '',
-      customText: '',
-      description: '',
-      selectedFile: null
-    });
+      toast({
+        title: "Custom Order Submitted!",
+        description: `Order #${response.data.id.slice(0, 8)} received! We'll contact you within 24 hours with a quote and timeline.`,
+      });
+
+      // Reset form
+      setFormData({
+        email: '',
+        customText: '',
+        description: '',
+        selectedFile: null
+      });
+    } catch (error) {
+      console.error('Custom order submission error:', error);
+      toast({
+        title: "Submission Failed",
+        description: "There was an error submitting your custom order. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -223,10 +236,11 @@ const CustomDesign = () => {
 
                 <Button
                   onClick={handleSubmit}
+                  disabled={isSubmitting}
                   className="w-full bg-black text-white hover:bg-gray-800 transition-all duration-300 transform hover:scale-105"
                   size="lg"
                 >
-                  Submit Custom Order
+                  {isSubmitting ? 'Submitting...' : 'Submit Custom Order'}
                 </Button>
 
                 <p className="text-xs text-gray-500 text-center">
