@@ -559,6 +559,7 @@ async def run_all_tests():
             await test_health_check(session)
             await test_products_api(session)
             await test_orders_api(session)
+            await test_stripe_checkout_api(session)  # New Stripe checkout tests
             await test_custom_orders_api(session)
             await test_newsletter_api(session)
             await test_error_handling(session)
