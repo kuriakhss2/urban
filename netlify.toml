@@ -1,6 +1,10 @@
 [build]
+<<<<<<< Updated upstream
   base = "frontend"
   command = "yarn build"
+=======
+  command = "yarn --cwd frontend build"
+>>>>>>> Stashed changes
   publish = "frontend/build"
 
 [functions]
