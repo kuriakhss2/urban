@@ -1,11 +1,7 @@
 [build]
-<<<<<<< Updated upstream
   base = "frontend"
   command = "yarn build"
-=======
-  command = "yarn --cwd frontend build"
->>>>>>> Stashed changes
-  publish = "frontend/build"
+  publish = "build"
 
 [functions]
-  directory = "frontend/netlify/functions"
+  directory = "netlify/functions"
