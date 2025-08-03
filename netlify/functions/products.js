@@ -43,12 +43,24 @@ export async function handler(event) {
     if (id) endpoint = `${base}/api/products/${encodeURIComponent(id)}`;
     else if (category) endpoint = `${base}/api/products/category/${encodeURIComponent(category)}`;
 
-    const upstream = await fetch(endpoint, {
-      // If the upstream needs a token, add:
-      // headers: { Authorization: `Bearer ${process.env.API_TOKEN}` }
-    });
+    console.log("🔹 Fetching from:", endpoint);
+const upstream = await fetch(endpoint);
+const text = await upstream.text();
+console.log("🔹 Upstream response:", text);
 
-    const text = await upstream.text(); // upstream returns JSON already
+if (!upstream.ok) {
+  return {
+    statusCode: upstream.status,
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      error: 'Upstream error',
+      status: upstream.status,
+      requested_url: endpoint,
+      body: text
+    }),
+  };
+}
+
 
     if (!upstream.ok) {
       return {
