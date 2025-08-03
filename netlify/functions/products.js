@@ -1,10 +1,10 @@
 // netlify/functions/products.js
 
-// --- CORS allow-list (adjust if you add a custom domain) ---
+// --- CORS allow-list (add your custom domain when you have one) ---
 const ALLOWED_ORIGINS = new Set([
   "https://urban123.netlify.app",
-  "http://localhost:8888",
-  "http://localhost:5173",
+  "http://localhost:8888", // Netlify Dev
+  "http://localhost:5173", // Vite dev server
 ]);
 
 function corsHeaders(origin) {
@@ -17,7 +17,15 @@ function corsHeaders(origin) {
   };
 }
 
-// --- Robust category synonyms (edit to match your backend terms) ---
+// --- Prevent caching (avoid 304 Not Modified / stale empty responses) ---
+const NO_CACHE = {
+  "Content-Type": "application/json",
+  "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+  Pragma: "no-cache",
+  Expires: "0",
+};
+
+// --- Category synonyms/variants: adjust to match your backend values exactly ---
 const ALT_NAMES = {
   clothes: ["clothes", "clothing", "apparel"],
   socks: ["socks", "sock"],
@@ -25,7 +33,7 @@ const ALT_NAMES = {
   shoes: ["shoes", "shoe", "footwear"],
 };
 
-// --- Helper to fetch and safely parse JSON ---
+// --- Helper: fetch and parse JSON safely (and keep the raw text) ---
 async function fetchJson(endpoint) {
   const res = await fetch(endpoint);
   const text = await res.text();
@@ -47,7 +55,11 @@ exports.handler = async (event) => {
   try {
     const base = process.env.API_BASE;
     if (!base) {
-      return { statusCode: 500, headers, body: JSON.stringify({ error: "Missing API_BASE" }) };
+      return {
+        statusCode: 500,
+        headers: { ...headers, ...NO_CACHE },
+        body: JSON.stringify({ error: "Missing API_BASE" }),
+      };
     }
 
     const url = new URL(event.rawUrl);
@@ -55,20 +67,18 @@ exports.handler = async (event) => {
     const id = url.searchParams.get("id");
     const debug = url.searchParams.get("debug") === "1";
 
-    // 1) Build the first upstream endpoint
+    // 1) Build the first upstream endpoint (try the raw category first)
     let endpoint = `${base}/api/products`;
     if (id) {
       endpoint = `${base}/api/products/${encodeURIComponent(id)}`;
     } else if (rawCategory) {
-      // Try the raw category first; fallback will handle synonyms
       endpoint = `${base}/api/products/category/${encodeURIComponent(rawCategory)}`;
     }
 
-    // 2) First attempt (direct upstream call)
+    // 2) First attempt: call upstream as-is
     const first = await fetchJson(endpoint);
 
-    // 3) If it's a category query and the first attempt returned nothing useful,
-    //    do a fallback: fetch ALL, then filter locally using ALT_NAMES.
+    // 3) Fallback path: if category query returned nothing, fetch ALL and filter locally
     if (rawCategory && (!first.ok || !Array.isArray(first.json) || first.json.length === 0)) {
       const allAttempt = await fetchJson(`${base}/api/products`);
       let filtered = [];
@@ -87,7 +97,7 @@ exports.handler = async (event) => {
       if (debug) {
         return {
           statusCode: 200,
-          headers: { ...headers, "Content-Type": "application/json" },
+          headers: { ...headers, ...NO_CACHE },
           body: JSON.stringify({
             mode: "fallback-filter",
             requested_category: rawCategory,
@@ -103,7 +113,7 @@ exports.handler = async (event) => {
 
       return {
         statusCode: 200,
-        headers: { ...headers, "Content-Type": "application/json" },
+        headers: { ...headers, ...NO_CACHE },
         body: JSON.stringify(filtered),
       };
     }
@@ -113,7 +123,7 @@ exports.handler = async (event) => {
       if (debug) {
         return {
           statusCode: 200,
-          headers: { ...headers, "Content-Type": "application/json" },
+          headers: { ...headers, ...NO_CACHE },
           body: JSON.stringify({
             mode: "direct",
             endpoint: first.endpoint,
@@ -124,9 +134,10 @@ exports.handler = async (event) => {
           }),
         };
       }
+
       return {
         statusCode: 200,
-        headers: { ...headers, "Content-Type": "application/json" },
+        headers: { ...headers, ...NO_CACHE },
         body: Array.isArray(first.json) ? JSON.stringify(first.json) : first.text,
       };
     }
@@ -134,7 +145,7 @@ exports.handler = async (event) => {
     // 5) Upstream error
     return {
       statusCode: first.status || 502,
-      headers: { ...headers, "Content-Type": "application/json" },
+      headers: { ...headers, ...NO_CACHE },
       body: JSON.stringify({
         error: "Upstream error",
         requested_url: first.endpoint,
@@ -145,7 +156,7 @@ exports.handler = async (event) => {
   } catch (err) {
     return {
       statusCode: 500,
-      headers,
+      headers: { ...headers, ...NO_CACHE },
       body: JSON.stringify({ error: err.message || "Server error" }),
     };
   }
