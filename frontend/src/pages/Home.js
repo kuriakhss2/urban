@@ -23,16 +23,17 @@ const Home = () => {
     { name: 'Shoes', icon: Footprints, path: '/shoes', color: 'bg-gray-400' }
   ];
 
- useEffect(() => {
+useEffect(() => {
   const fetchProducts = async () => {
     try {
       const response = await axios.get('/.netlify/functions/products');
-      
-      // 👇 ADD THIS LINE
+
       console.log("Fetched products:", response.data);
-      
-      // Keep this as is for now
-      setFeaturedProducts(response.data.slice(0, 8));
+
+      // ✅ Safe handling of data
+      const data = Array.isArray(response.data) ? response.data : [];
+      setFeaturedProducts(data.slice(0, 8));
+
       setLoading(false);
     } catch (error) {
       console.error('Error fetching products:', error);
@@ -47,6 +48,7 @@ const Home = () => {
 
   fetchProducts();
 }, []);
+
 
 
   const handleAddToCart = (product) => {
@@ -137,7 +139,7 @@ const Home = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {featuredProducts.map((product) => (
+             {Array.isArray(featuredProducts) && featuredProducts.map((product) => (
                 <Card key={product.id} className="group hover:shadow-lg transition-all duration-300 border-gray-200">
                   <CardContent className="p-0">
                     <div className="aspect-square overflow-hidden">

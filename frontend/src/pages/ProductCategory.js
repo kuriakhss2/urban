@@ -16,26 +16,29 @@ const ProductCategory = ({ category }) => {
   const { addToCart } = useCart();
   const { toast } = useToast();
 
-  useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        setLoading(true);
-        const response = await axios.get(`/.netlify/functions/products?category=${category}`);
-        setProducts(response.data);
-        setLoading(false);
-      } catch (error) {
-        console.error('Error fetching products:', error);
-        toast({
-          title: "Error",
-          description: "Failed to load products. Please try again.",
-          variant: "destructive"
-        });
-        setLoading(false);
-      }
-    };
+useEffect(() => {
+  const fetchProducts = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`/.netlify/functions/products?category=${category}`);
+      console.log("Fetched category products:", response.data);
+      const data = Array.isArray(response.data) ? response.data : [];
+      setProducts(data);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load products. Please try again.",
+        variant: "destructive"
+      });
+      setLoading(false);
+    }
+  };
 
-    fetchProducts();
-  }, [category]);
+  fetchProducts();
+}, [category]);
+
   
   const sortedProducts = [...products].sort((a, b) => {
     if (sortBy === 'price-low') return a.price - b.price;
