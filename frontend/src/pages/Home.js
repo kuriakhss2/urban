@@ -27,6 +27,11 @@ const Home = () => {
   const fetchProducts = async () => {
     try {
       const response = await axios.get('/.netlify/functions/products');
+      
+      // 👇 ADD THIS LINE
+      console.log("Fetched products:", response.data);
+      
+      // Keep this as is for now
       setFeaturedProducts(response.data.slice(0, 8));
       setLoading(false);
     } catch (error) {
