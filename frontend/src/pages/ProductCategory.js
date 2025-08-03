@@ -20,7 +20,7 @@ const ProductCategory = ({ category }) => {
     const fetchProducts = async () => {
       try {
         setLoading(true);
-        const response = await axios.get(`${API}/products/category/${category}`);
+        const response = await axios.get(`/.netlify/functions/products?category=${category}`);
         setProducts(response.data);
         setLoading(false);
       } catch (error) {

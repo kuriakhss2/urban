@@ -23,25 +23,26 @@ const Home = () => {
     { name: 'Shoes', icon: Footprints, path: '/shoes', color: 'bg-gray-400' }
   ];
 
-  useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        const response = await axios.get(`${API}/products`);
-        setFeaturedProducts(response.data.slice(0, 8));
-        setLoading(false);
-      } catch (error) {
-        console.error('Error fetching products:', error);
-        toast({
-          title: "Error",
-          description: "Failed to load products. Please try again.",
-          variant: "destructive"
-        });
-        setLoading(false);
-      }
-    };
+ useEffect(() => {
+  const fetchProducts = async () => {
+    try {
+      const response = await axios.get('/.netlify/functions/products');
+      setFeaturedProducts(response.data.slice(0, 8));
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load products. Please try again.",
+        variant: "destructive"
+      });
+      setLoading(false);
+    }
+  };
 
-    fetchProducts();
-  }, []);
+  fetchProducts();
+}, []);
+
 
   const handleAddToCart = (product) => {
     addToCart(product);
