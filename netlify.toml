@@ -5,3 +5,15 @@
 
 [functions]
   directory = "netlify/functions"
+
+# Proxy any call that starts with /api/ to the external server
+[[redirects]]
+  from   = "/api/*"
+  to     = "https://a7cd9f18-4653-40d4-b562-f40518ece6e0.preview.emergentagent.com/api/:splat"
+  status = 200      # “200 rewrite” keeps the original method & acts as a transparent proxy
+
+# Your SPA fallback should stay LAST so it doesn't swallow the proxy
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
