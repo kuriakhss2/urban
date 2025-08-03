@@ -1,11 +1,9 @@
 // netlify/functions/products.js
 
-// Allow your site and local dev to call this function
 const ALLOWED_ORIGINS = new Set([
   'https://urban123.netlify.app',
-  'http://localhost:8888', // Netlify Dev
-  'http://localhost:5173', // Vite dev (change if different)
-  // 'https://YOUR-CUSTOM-DOMAIN.com',
+  'http://localhost:8888',
+  'http://localhost:5173',
 ]);
 
 function corsHeaders(origin) {
@@ -18,68 +16,128 @@ function corsHeaders(origin) {
   };
 }
 
-// If your project is CommonJS (no "type":"module" in package.json), replace the next line with:
-// exports.handler = async (event) => { ... }
-export async function handler(event) {
-  const headers = corsHeaders(event.headers.origin || '');
+// Adjust this if your backend’s category names differ.
+// Example guesses shown; tweak once you see real values.
+const CATEGORY_MAP = {
+  clothes: 'Clothes',   // or 'clothing'
+  socks: 'Socks',
+  books: 'Books',
+  shoes: 'Shoes',       // or 'footwear'
+};
 
-  // CORS preflight
-  if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 204, headers };
-  }
+exports.handler = async (event) => {
+  const headers = corsHeaders(event.headers.origin || '');
+  if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers };
 
   try {
-    const base = process.env.API_BASE; // set this in Netlify env vars
-    if (!base) {
-      return { statusCode: 500, headers, body: JSON.stringify({ error: 'Missing API_BASE' }) };
+    const base = process.env.API_BASE;
+    if (!base) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Missing API_BASE' }) };
+
+    const url = new URL(event.rawUrl);
+    const rawCategory = url.searchParams.get('category');
+    const id = url.searchParams.get('id');
+    const debug = url.searchParams.get('debug') === '1';
+
+    // Normalize category for the upstream API
+    const normalizedCategory = rawCategory
+      ? (CATEGORY_MAP[rawCategory.toLowerCase()] ?? rawCategory)
+      : null;
+
+    // Build upstream endpoint
+    let endpoint = `${base}/api/products`;
+    if (id) {
+      endpoint = `${base}/api/products/${encodeURIComponent(id)}`;
+    } else if (normalizedCategory) {
+      endpoint = `${base}/api/products/category/${encodeURIComponent(normalizedCategory)}`;
     }
 
-    // Support three patterns using query params: all, by category, by id
-    const url = new URL(event.rawUrl);
-    const category = url.searchParams.get('category');
-    const id = url.searchParams.get('id');
+    // Helper to fetch & parse JSON safely
+    const fetchJson = async (ep) => {
+      const res = await fetch(ep);
+      const text = await res.text();
+      let json;
+      try { json = JSON.parse(text); } catch { json = null; }
+      return { ok: res.ok, status: res.status, text, json };
+    };
 
-    let endpoint = `${base}/api/products`;
-    if (id) endpoint = `${base}/api/products/${encodeURIComponent(id)}`;
-    else if (category) endpoint = `${base}/api/products/category/${encodeURIComponent(category)}`;
+    // First attempt (direct category or id or all)
+    const first = await fetchJson(endpoint);
 
-    console.log("🔹 Fetching from:", endpoint);
-const upstream = await fetch(endpoint);
-const text = await upstream.text();
-console.log("🔹 Upstream response:", text);
+    // If asking by category but got nothing (or non-array),
+    // fallback: get ALL and filter locally (case-insensitive)
+    if (rawCategory && (!first.ok || !Array.isArray(first.json) || first.json.length === 0)) {
+      const allAttempt = await fetchJson(`${base}/api/products`);
+      let filtered = [];
+      if (Array.isArray(allAttempt.json)) {
+        const want = rawCategory.toLowerCase();
+        filtered = allAttempt.json.filter(p => {
+          const c = (p.category || '').toString().toLowerCase();
+          // match exact, or against normalized as backup
+          return c === want || c === (normalizedCategory || '').toLowerCase();
+        });
+      }
 
-if (!upstream.ok) {
-  return {
-    statusCode: upstream.status,
-    headers: { ...headers, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      error: 'Upstream error',
-      status: upstream.status,
-      requested_url: endpoint,
-      body: text
-    }),
-  };
-}
+      if (debug) {
+        return {
+          statusCode: 200,
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mode: 'fallback-filter',
+            requested_category: rawCategory,
+            normalized_category: normalizedCategory,
+            tried_endpoint: endpoint,
+            upstream_first_status: first.status,
+            upstream_first_sample: typeof first.json === 'object' ? (Array.isArray(first.json) ? first.json.slice(0, 2) : first.json) : first.text,
+            upstream_all_status: allAttempt.status,
+            count_after_filter: filtered.length,
+            sample_after_filter: filtered.slice(0, 2),
+          }),
+        };
+      }
 
-
-    if (!upstream.ok) {
       return {
-        statusCode: upstream.status,
+        statusCode: 200,
         headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ error: 'Upstream error', status: upstream.status, body: text }),
+        body: JSON.stringify(filtered),
       };
     }
 
+    // Normal successful path
+    if (first.ok) {
+      if (debug) {
+        return {
+          statusCode: 200,
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mode: 'direct',
+            endpoint,
+            status: first.status,
+            is_array: Array.isArray(first.json),
+            length: Array.isArray(first.json) ? first.json.length : undefined,
+            sample: Array.isArray(first.json) ? first.json.slice(0, 2) : first.json ?? first.text,
+          }),
+        };
+      }
+      return {
+        statusCode: 200,
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: Array.isArray(first.json) ? JSON.stringify(first.json) : first.text,
+      };
+    }
+
+    // Upstream error
     return {
-      statusCode: 200,
+      statusCode: first.status || 502,
       headers: { ...headers, 'Content-Type': 'application/json' },
-      body: text,
+      body: JSON.stringify({
+        error: 'Upstream error',
+        requested_url: endpoint,
+        status: first.status,
+        body: first.text,
+      }),
     };
+
   } catch (err) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: err.message || 'Server error' }),
-    };
+    return { statusCode: 500, headers, body: JSON.stringify({ error: err.message || 'Server error' }) };
   }
-}
+};
